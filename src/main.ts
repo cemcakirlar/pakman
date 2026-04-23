@@ -1,4 +1,6 @@
 import Phaser from "phaser";
+import { ArcadeSfx } from "./arcadeSfx";
+import * as gameOptions from "./gameOptions";
 
 enum TileType {
   Path = 0,
@@ -50,8 +52,8 @@ interface GameState {
 }
 
 const TILE_SIZE = 24;
-/** Extra room for D-pad, labels, and safe on-screen control hints (mobile D-pad must clear START row). */
-const HUD_HEIGHT = 265;
+/** Extra room for D-pad, labels, two-line hints, centered buttons (mobile yHelp ~maze+252). */
+const HUD_HEIGHT = 285;
 const TURN_THRESHOLD = 0.25;
 const PACMAN_SPEED = 90;
 const GHOST_SPEED = 80;
@@ -145,6 +147,17 @@ class PacmanScene extends Phaser.Scene {
   private controlsText!: Phaser.GameObjects.Text;
   private resultText!: Phaser.GameObjects.Text;
   private showTouchDpad = false;
+  private sfx!: ArcadeSfx;
+  private optionsRoot!: Phaser.GameObjects.Container;
+  private optionsMuteText!: Phaser.GameObjects.Text;
+  private optionsVolText!: Phaser.GameObjects.Text;
+  private optionsHintText!: Phaser.GameObjects.Text;
+  private optionsVibrateText: Phaser.GameObjects.Text | null = null;
+  private optionsOpen = false;
+  private optionsWasPaused = false;
+  /** Bottom control hints row (toggled in Options). */
+  private showHintsSetting = true;
+  private vibrateOnMunch = false;
 
   private gameState: GameState = {
     score: 0,
@@ -175,7 +188,16 @@ class PacmanScene extends Phaser.Scene {
     this.createPacman();
     this.createGhosts();
     this.createUI();
+
+    this.sfx = new ArcadeSfx();
+    this.input.once("pointerdown", () => this.sfx.resume());
     this.setupInput();
+
+    this.showHintsSetting = gameOptions.loadShowHints();
+    this.vibrateOnMunch = gameOptions.loadVibrate();
+    this.controlsText.setVisible(this.showHintsSetting);
+
+    this.createOptionsOverlay();
 
     this.resultText.setText("PRESS START");
     this.pacMouthPhase = 0;
@@ -203,6 +225,7 @@ class PacmanScene extends Phaser.Scene {
   }
 
   private setupInput(): void {
+    this.input.keyboard?.once("keydown", () => this.sfx.resume());
     this.cursors = this.input.keyboard?.createCursorKeys() as Phaser.Types.Input.Keyboard.CursorKeys;
     this.wasd = this.input.keyboard?.addKeys("W,A,S,D") as {
       W: Phaser.Input.Keyboard.Key;
@@ -224,6 +247,7 @@ class PacmanScene extends Phaser.Scene {
     this.input.keyboard?.on("keydown-ENTER", () => this.startGame());
     this.input.keyboard?.on("keydown-P", () => this.togglePause());
     this.input.keyboard?.on("keydown-R", () => this.resetGame());
+    this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.O).on("down", () => this.toggleOptions());
   }
 
   private createPacman(): void {
@@ -294,7 +318,7 @@ class PacmanScene extends Phaser.Scene {
     g.setRotation(this.directionToAngle(this.getPacmanFacingForSprite()));
     const mouth = 0.12 + (PAC_MOUTH_MAX - 0.12) * (0.5 + 0.5 * Math.sin(this.pacMouthPhase));
     g.fillStyle(0xffea00, 1);
-    /** `false` = fill the big sector (body); `true` inverts to the small wedge (looked like yellow mouth, black body). */
+    /** `false` fills the large sector (body); `true` would fill the small wedge only. */
     g.slice(0, 0, PACMAN_RADIUS, mouth, Phaser.Math.PI2 - mouth, false);
     g.fillPath();
   }
@@ -367,20 +391,35 @@ class PacmanScene extends Phaser.Scene {
     /** Desktop: clear maze bottom. Mobile: clear D-pad (▼ was overlapping PAUSE). */
     const yButtons = this.showTouchDpad ? mazeBottom + 140 : mazeBottom + 32;
     const yScore = this.showTouchDpad ? mazeBottom + 186 : mazeBottom + 66;
-    const yHelp = this.showTouchDpad ? mazeBottom + 232 : mazeBottom + 110;
-    const makeButton = (x: number, label: string, cb: () => void): void => {
-      this.add
-        .text(x, yButtons, label, {
-          color: "#ffffff",
-          backgroundColor: "#1b2a4b",
-          fontFamily: "monospace",
-          fontSize: "16px",
-          padding: { left: 10, right: 10, top: 8, bottom: 8 },
-        })
-        .setOrigin(0, 0.5)
-        .setInteractive({ useHandCursor: true })
-        .on("pointerdown", cb);
+    const yHelp = this.showTouchDpad ? mazeBottom + 252 : mazeBottom + 118;
+    const btnStyle: Phaser.Types.GameObjects.Text.TextStyle = {
+      color: "#ffffff",
+      backgroundColor: "#1b2a4b",
+      fontFamily: "monospace",
+      fontSize: "16px",
+      padding: { left: 10, right: 10, top: 8, bottom: 8 },
     };
+    const btnGap = 12;
+    const btnDefs: Array<{ label: string; cb: () => void }> = [
+      { label: "START", cb: () => this.startGame() },
+      { label: "PAUSE", cb: () => this.togglePause() },
+      { label: "RESET", cb: () => this.resetGame() },
+      { label: "OPTIONS", cb: () => this.toggleOptions() },
+    ];
+    const btnTexts = btnDefs.map((def) =>
+      this.add
+        .text(0, yButtons, def.label, btnStyle)
+        .setOrigin(0.5, 0.5)
+        .setDepth(5)
+        .setInteractive({ useHandCursor: true })
+        .on("pointerdown", def.cb),
+    );
+    let btnRowWidth = btnTexts.reduce((sum, t) => sum + t.width + btnGap, 0) - btnGap;
+    let btnCursorX = centerX - btnRowWidth / 2;
+    btnTexts.forEach((t) => {
+      t.setPosition(btnCursorX + t.width / 2, yButtons);
+      btnCursorX += t.width + btnGap;
+    });
     const placeDpad = (x: number, y: number, symbol: string, dir: Direction): void => {
       this.add
         .text(x, y, symbol, {
@@ -406,10 +445,6 @@ class PacmanScene extends Phaser.Scene {
       placeDpad(centerX + 48, padY, "▶", Direction.Right);
     }
 
-    makeButton(centerX - 130, "START", () => this.startGame());
-    makeButton(centerX - 34, "PAUSE", () => this.togglePause());
-    makeButton(centerX + 62, "RESET", () => this.resetGame());
-
     this.uiText = this.add
       .text(centerX, yScore, "", {
         color: "#ffffff",
@@ -423,11 +458,11 @@ class PacmanScene extends Phaser.Scene {
         color: "#8fd3ff",
         fontFamily: "monospace",
         fontSize: "12px",
-        wordWrap: { width: MAP_WIDTH * TILE_SIZE - 16 },
         align: "center",
+        lineSpacing: 6,
       })
       .setDepth(5)
-      .setOrigin(0.5);
+      .setOrigin(0.5, 0.5);
     this.resultText = this.add
       .text(centerX, MAP_HEIGHT * TILE_SIZE * 0.5, "", {
         color: "#ffe86b",
@@ -438,7 +473,169 @@ class PacmanScene extends Phaser.Scene {
       .setOrigin(0.5);
   }
 
+  private createOptionsOverlay(): void {
+    const w = this.scale.width;
+    const h = this.scale.height;
+    const root = this.add.container(0, 0).setDepth(200).setVisible(false);
+    this.optionsRoot = root;
+
+    const backdrop = this.add.rectangle(0, 0, w, h, 0x000000, 0.75).setOrigin(0).setInteractive();
+    backdrop.on("pointerdown", () => this.closeOptions());
+    root.add(backdrop);
+
+    const cx = w * 0.5;
+    const cy = h * 0.5;
+    const panelW = Math.min(360, w - 16);
+    const panelH = this.showTouchDpad ? 340 : 300;
+    const panel = this.add
+      .rectangle(cx, cy, panelW, panelH, 0x142032, 0.98)
+      .setOrigin(0.5)
+      .setStrokeStyle(2, 0x4a8cff)
+      .setInteractive();
+    root.add(panel);
+
+    root.add(
+      this.add
+        .text(cx, cy - panelH / 2 + 32, "OPTIONS", {
+          fontFamily: "monospace",
+          fontSize: "22px",
+          color: "#ffe066",
+        })
+        .setOrigin(0.5),
+    );
+
+    const rowStyle: Phaser.Types.GameObjects.Text.TextStyle = {
+      fontFamily: "monospace",
+      fontSize: "14px",
+      color: "#e8f4ff",
+      backgroundColor: "#243552",
+      align: "center",
+      fixedWidth: panelW - 28,
+      padding: { left: 8, right: 8, top: 10, bottom: 10 },
+    };
+
+    let y = cy - panelH / 2 + 78;
+    const muteRow = this.add.text(cx, y, "", rowStyle).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    muteRow.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      pointer.event?.stopPropagation?.();
+      this.sfx.setMuted(!this.sfx.isMuted());
+      this.syncOptionsLabels();
+    });
+    root.add(muteRow);
+    this.optionsMuteText = muteRow;
+    y += 50;
+
+    const volRow = this.add.text(cx, y, "", rowStyle).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    volRow.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      pointer.event?.stopPropagation?.();
+      const v = this.sfx.getVolumeLinear();
+      const next = v < 0.34 ? 0.5 : v < 0.67 ? 1 : 0.33;
+      this.sfx.setVolumeLinear(next);
+      this.syncOptionsLabels();
+    });
+    root.add(volRow);
+    this.optionsVolText = volRow;
+    y += 50;
+
+    const hintRow = this.add.text(cx, y, "", rowStyle).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    hintRow.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      pointer.event?.stopPropagation?.();
+      this.showHintsSetting = !this.showHintsSetting;
+      gameOptions.saveShowHints(this.showHintsSetting);
+      this.controlsText.setVisible(this.showHintsSetting);
+      this.syncOptionsLabels();
+    });
+    root.add(hintRow);
+    this.optionsHintText = hintRow;
+    y += 50;
+
+    if (this.showTouchDpad) {
+      const vibRow = this.add.text(cx, y, "", rowStyle).setOrigin(0.5).setInteractive({ useHandCursor: true });
+      vibRow.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+        pointer.event?.stopPropagation?.();
+        this.vibrateOnMunch = !this.vibrateOnMunch;
+        gameOptions.saveVibrate(this.vibrateOnMunch);
+        this.syncOptionsLabels();
+      });
+      root.add(vibRow);
+      this.optionsVibrateText = vibRow;
+      y += 50;
+    }
+
+    root.add(
+      this.add
+        .text(cx, cy + panelH / 2 - 52, "PRESS O OR TAP OUTSIDE TO CLOSE", {
+          fontFamily: "monospace",
+          fontSize: "11px",
+          color: "#7a9bb8",
+        })
+        .setOrigin(0.5),
+    );
+
+    const closeBtn = this.add
+      .text(cx, cy + panelH / 2 - 22, "CLOSE", {
+        fontFamily: "monospace",
+        fontSize: "16px",
+        color: "#ffffff",
+        backgroundColor: "#2a4a7a",
+        padding: { left: 20, right: 20, top: 10, bottom: 10 },
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    closeBtn.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      pointer.event?.stopPropagation?.();
+      this.closeOptions();
+    });
+    root.add(closeBtn);
+
+    this.syncOptionsLabels();
+  }
+
+  private syncOptionsLabels(): void {
+    this.optionsMuteText.setText(this.sfx.isMuted() ? "SOUND: OFF (MUTED)" : "SOUND: ON");
+    const v = this.sfx.getVolumeLinear();
+    const volLabel = v < 0.4 ? "LOW" : v < 0.85 ? "MEDIUM" : "HIGH";
+    this.optionsVolText.setText(`SFX VOLUME: ${volLabel}`);
+    this.optionsHintText.setText(this.showHintsSetting ? "CONTROL HINTS: SHOW" : "CONTROL HINTS: HIDE");
+    if (this.optionsVibrateText) {
+      this.optionsVibrateText.setText(this.vibrateOnMunch ? "HAPTIC (DOT EAT): ON" : "HAPTIC (DOT EAT): OFF");
+    }
+  }
+
+  private toggleOptions(): void {
+    if (this.optionsOpen) this.closeOptions();
+    else this.openOptions();
+  }
+
+  private openOptions(): void {
+    this.optionsOpen = true;
+    this.optionsRoot.setVisible(true);
+    if (this.gameState.hasStarted && !this.gameState.isGameOver && !this.gameState.isWin) {
+      this.optionsWasPaused = this.gameState.isPaused;
+      if (!this.optionsWasPaused) {
+        this.gameState.isPaused = true;
+        this.physics.world.isPaused = true;
+      }
+    }
+    this.syncOptionsLabels();
+    this.refreshUi();
+  }
+
+  private closeOptions(): void {
+    if (!this.optionsOpen) return;
+    this.optionsOpen = false;
+    this.optionsRoot.setVisible(false);
+    if (this.gameState.hasStarted && !this.gameState.isGameOver && !this.gameState.isWin && !this.optionsWasPaused) {
+      this.gameState.isPaused = false;
+      this.physics.world.isPaused = false;
+      this.resultText.setText("");
+    }
+    this.optionsWasPaused = false;
+    this.refreshUi();
+  }
+
   private captureDirectionInput(): void {
+    if (this.optionsOpen) return;
     const left = this.cursors.left.isDown || this.wasd.A.isDown;
     const right = this.cursors.right.isDown || this.wasd.D.isDown;
     const up = this.cursors.up.isDown || this.wasd.W.isDown;
@@ -569,6 +766,10 @@ class PacmanScene extends Phaser.Scene {
       this.maze[tile.y][tile.x] = TileType.Path;
       this.gameState.score += 10;
       this.gameState.dotsRemaining -= 1;
+      this.sfx.playMunch();
+      if (this.vibrateOnMunch && typeof navigator !== "undefined" && navigator.vibrate) {
+        navigator.vibrate(10);
+      }
       this.drawPellets();
     } else if (t === TileType.PowerPellet) {
       this.maze[tile.y][tile.x] = TileType.Path;
@@ -576,26 +777,33 @@ class PacmanScene extends Phaser.Scene {
       this.gameState.dotsRemaining -= 1;
       this.gameState.ghostCombo = 0;
       this.gameState.frightenedUntil = this.time.now + FRIGHTENED_DURATION_MS;
+      this.sfx.playPowerPellet();
       this.drawPellets();
     }
 
     if (this.gameState.dotsRemaining <= 0 && !this.gameState.isWin) {
       this.gameState.isWin = true;
+      this.sfx.playWinJingle();
       this.resultText.setText("YOU WIN");
       this.stopAll();
     }
   }
 
   private checkGhostVsPacman(): void {
-    this.ghosts.forEach((ghost) => {
-      const d = Phaser.Math.Distance.Between(this.pacmanGfx.x, this.pacmanGfx.y, ghost.graphics.x, ghost.graphics.y);
-      if (d > TILE_SIZE * 0.58) return;
-
-      if (this.isFrightened()) {
+    if (this.isFrightened()) {
+      this.ghosts.forEach((ghost) => {
+        const d = Phaser.Math.Distance.Between(this.pacmanGfx.x, this.pacmanGfx.y, ghost.graphics.x, ghost.graphics.y);
+        if (d > TILE_SIZE * 0.58) return;
+        this.sfx.playGhostEaten();
         this.gameState.ghostCombo += 1;
         this.gameState.score += 200 * this.gameState.ghostCombo;
         this.resetGhost(ghost);
-      } else {
+      });
+    } else {
+      for (const ghost of this.ghosts) {
+        const d = Phaser.Math.Distance.Between(this.pacmanGfx.x, this.pacmanGfx.y, ghost.graphics.x, ghost.graphics.y);
+        if (d > TILE_SIZE * 0.58) continue;
+        this.sfx.playDeath();
         this.gameState.lives -= 1;
         if (this.gameState.lives <= 0) {
           this.gameState.isGameOver = true;
@@ -604,8 +812,9 @@ class PacmanScene extends Phaser.Scene {
         } else {
           this.resetRound();
         }
+        return;
       }
-    });
+    }
   }
 
   private applyTunnelWrap(): void {
@@ -620,6 +829,7 @@ class PacmanScene extends Phaser.Scene {
 
   private startGame(): void {
     if (this.gameState.isGameOver || this.gameState.isWin) return;
+    this.sfx.resume();
     this.gameState.hasStarted = true;
     this.gameState.isPaused = false;
     this.physics.world.isPaused = false;
@@ -686,7 +896,7 @@ class PacmanScene extends Phaser.Scene {
     const state = this.gameState.isGameOver
       ? "GAME OVER"
       : this.gameState.isWin
-        ? "WIN"
+        ? "YOU WIN"
         : this.gameState.isPaused
           ? "PAUSED"
           : this.gameState.hasStarted
@@ -695,9 +905,10 @@ class PacmanScene extends Phaser.Scene {
     this.uiText.setText(`SCORE ${this.gameState.score}   LIVES ${this.gameState.lives}   STATE ${state}`);
     this.controlsText.setText(
       this.showTouchDpad
-        ? "D-PAD  ·  ARROWS / WASD  ·  START  ·  P PAUSE  ·  R RESET"
-        : "ARROWS / WASD  ·  START ENTER  ·  P PAUSE  ·  R RESET",
+        ? "D-PAD OR ARROWS / WASD — MOVE\nSTART · P PAUSE · R RESET · O OPTIONS"
+        : "ARROWS / WASD — MOVE · START WITH ENTER\nP PAUSE · R RESET · O OPTIONS",
     );
+    this.controlsText.setVisible(this.showHintsSetting);
   }
 
   private isFrightened(): boolean {
