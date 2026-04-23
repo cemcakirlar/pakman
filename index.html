@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no"
+    />
+    <meta name="theme-color" content="#060912" />
+    <title>Pakman</title>
+    <style>
+      /**
+       * Avoid 100dvh/100dvw: they change as the browser animates its chrome (tabs, UI) and
+       * trigger Phaser scale.refresh in a slow “zoom drift” loop with resize handlers.
+       * Use 100svh (stable) + % chain instead.
+       */
+      html {
+        height: 100%;
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        min-height: 100%;
+        background: #060912;
+        overflow: hidden;
+        overscroll-behavior: none;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: none;
+      }
+
+      body {
+        min-height: 100svh;
+        height: 100%;
+        display: flex;
+        flex-direction: row;
+        align-items: stretch;
+        justify-content: center;
+        padding: max(8px, env(safe-area-inset-top, 0px)) max(8px, env(safe-area-inset-right, 0px))
+          max(8px, env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));
+        box-sizing: border-box;
+      }
+
+      #game-container {
+        position: relative;
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        min-height: 0;
+        flex: 1 1 auto;
+        /* Clip canvas; do not let inner canvas drive layout feedback */
+        overflow: hidden;
+        contain: layout;
+        box-sizing: border-box;
+        border: 2px solid #213d7a;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+        touch-action: none;
+        border-radius: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game-container"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
