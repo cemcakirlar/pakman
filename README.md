@@ -11,14 +11,14 @@ pnpm dev
 
 ## Kontroller
 
-| Tuş / kontrol | İş |
-| ------------- | -- |
-| Ok tuşları / WASD | Yön |
-| Enter veya START | Oyunu başlat |
-| P veya PAUSE | Duraklat / devam |
-| R veya RESET | Skoru ve labirenti sıfırla |
-| O veya OPTIONS | Ses, ipuçları, titreşim |
-| D-pad | Dokunmatik cihazlarda yön |
+| Tuş / kontrol     | İş                         |
+| ----------------- | -------------------------- |
+| Ok tuşları / WASD | Yön                        |
+| Enter veya START  | Oyunu başlat               |
+| P veya PAUSE      | Duraklat / devam           |
+| R veya RESET      | Skoru ve labirenti sıfırla |
+| O veya OPTIONS    | Ses, ipuçları, titreşim    |
+| D-pad             | Dokunmatik cihazlarda yön  |
 
 Dokunmatikte D-pad’e basmak oyunu da başlatır.
 
@@ -35,21 +35,21 @@ Yan tüneller ekranın diğer ucuna çıkarır.
 
 ## Hayaletler
 
-| Hayalet | Renk | Takip |
-| ------- | ---- | ----- |
-| Blinky | Kırmızı | Doğrudan seni kovalar |
-| Pinky | Pembe | Baktığın yönde 4 kare önünü keser |
-| Inky | Camgöbeği | Blinky ile pusu noktan arasını ikiye katlar |
-| Clyde | Turuncu | Uzaktayken kovalar; 8 kareye girince köşeye kaçar |
+| Hayalet | Renk      | Takip                                             |
+| ------- | --------- | ------------------------------------------------- |
+| Blinky  | Kırmızı   | Doğrudan seni kovalar                             |
+| Pinky   | Pembe     | Baktığın yönde 4 kare önünü keser                 |
+| Inky    | Camgöbeği | Blinky ile pusu noktan arasını ikiye katlar       |
+| Clyde   | Turuncu   | Uzaktayken kovalar; 8 kareye girince köşeye kaçar |
 
 ## Seçenekler
 
 Ayarlar tarayıcıda kalır.
 
-| Seçenek | Ne yapar |
-| ------- | -------- |
-| Ses | Kapat / aç, ses seviyesi |
-| İpuçları | Alt kontrol satırını göster / gizle |
+| Seçenek  | Ne yapar                                            |
+| -------- | --------------------------------------------------- |
+| Ses      | Kapat / aç, ses seviyesi                            |
+| İpuçları | Alt kontrol satırını göster / gizle                 |
 | Titreşim | Nokta yerken kısa titreşim (destekleyen cihazlarda) |
 
 ## Geliştirme
