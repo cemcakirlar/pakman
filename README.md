@@ -60,3 +60,12 @@ pnpm preview
 ```
 
 **Yığın:** Phaser 3, TypeScript, Vite. Statik çıktı Cloudflare’e Wrangler ile gider (`wrangler.jsonc`).
+
+## ⚖️ Yasal Uyarı / Disclaimer
+
+Bu proje ticari olmayan, eğitim ve açık kaynak deneyimi amacıyla geliştirilmiş bir arcade klonudur. PAC-MAN, ilgili karakterler ve oyun mekanikleri Bandai Namco Entertainment Inc. şirketine aittir. Proje içerisinde telifli orijinal grafik veya ses dosyası kullanılmamış; tüm görsel öğeler vektörel, sesler ise Web Audio API ile sentetik olarak üretilmiştir.
+
+## 📝 Lisans
+
+Bu proje [MIT](LICENSE) lisansı ile lisanslanmıştır.
+
